@@ -1,14 +1,28 @@
+-- 1. Tunggu game selesai loading penuh
+if not game:IsLoaded() then 
+    game.Loaded:Wait() 
+end
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterPlayer = game:GetService("StarterPlayer")
+local TeleportService = game:GetService("TeleportService")
+local GuiService = game:GetService("GuiService")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local startPlaceId = game.PlaceId
+
+-- ==================== [ GUI USERNAME AKUN ] ====================
 local CoreGui = game:GetService("CoreGui")
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AccountInfoGui"
+screenGui.ResetOnSpawn = false
 
 local player = Players.LocalPlayer 
 local myUserId = player.UserId
 local myUsername = player.Name
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AccountDisplayGui"
-screenGui.ResetOnSpawn = false
 
 local suksesGui, errGui = pcall(function()
     screenGui.Parent = CoreGui
@@ -87,106 +101,13 @@ invisibleClicker.MouseButton1Click:Connect(function()
     end
 end)
 
-local plotsFolder = workspace.Plots
-local plotSaya = nil
-local nomorPlotSaya = nil
+print("[MELOAD] Loaded - treadmill + reconnect + GUI aktif (HP & PC Fix)")
 
-for _, plot in ipairs(plotsFolder:GetChildren()) do
-    local ownerId = plot:GetAttribute("OwnerUserId")
-    if ownerId and tonumber(ownerId) == myUserId then
-        plotSaya = plot
-        local nomorStr = plot.Name:match("%d+")
-        if nomorStr then
-            nomorPlotSaya = tonumber(nomorStr)
-        end
-        break
-    end
-end
+-- Variabel Kontrol untuk Fitur Auto Reconnect
+local autoReconnectEnabled = true
+local isReconnecting = false
 
-if plotSaya and nomorPlotSaya then
-    local function eksekusiTreadmill()
-        local treadmill = nil
-        for _, child in ipairs(plotSaya:GetDescendants()) do
-            if child.Name:match("Treadmill") and not child.Name:match("Board") and not child.Name:match("Gui") then
-                treadmill = child
-                break
-            end
-        end
-
-        if not treadmill then return end
-
-        local targetPart = treadmill:IsA("Model") and (treadmill.PrimaryPart or treadmill:FindFirstChild("Hitbox") or treadmill:FindFirstChildWhichIsA("BasePart")) or treadmill
-        if not targetPart then return end
-
-        local cframeTreadmill = targetPart.CFrame
-
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            player.Character.HumanoidRootPart.CFrame = cframeTreadmill * CFrame.new(0, 2, 0)
-        end
-
-        firesignal(ReplicatedStorage.TreadmillSessionRemote.OnClientEvent, nomorPlotSaya, cframeTreadmill)
-    end
-
-    eksekusiTreadmill()
-
-    local priceLabel = player:WaitForChild("PlayerGui"):WaitForChild("TreadmillBoardGui"):WaitForChild("Purchase"):WaitForChild("Price")
-    local upgradeRemote = ReplicatedStorage:WaitForChild("UpgradeTreadmillRequest")
-
-    local function dapatkanHargaAsli()
-        local teks = priceLabel.Text:gsub("[%$%,]", "")
-        local angkaMurni = tonumber(teks:match("[%d%.]+"))
-        
-        if not angkaMurni then return 0 end
-        
-        local sufiks = teks:match("%a")
-        if sufiks then
-            sufiks = sufiks:lower()
-            if sufiks == "k" then angkaMurni = angkaMurni * 1000
-            elseif sufiks == "m" then angkaMurni = angkaMurni * 1000000
-            elseif sufiks == "b" then angkaMurni = angkaMurni * 1000000000
-            elseif sufiks == "t" then angkaMurni = angkaMurni * 1000000000000
-            end
-        end
-        return angkaMurni
-    end
-
-    local function dapatkanUangMurni()
-        return player:GetAttribute("Cash") or 0
-    end
-
-    task.spawn(function()
-        while task.wait(1) do
-            local hargaUpgrade = dapatkanHargaAsli()
-            local uangGua = dapatkanUangMurni()
-            
-            if hargaUpgrade > 0 and uangGua >= hargaUpgrade then
-                upgradeRemote:FireServer()
-                task.wait(0.5)
-                eksekusiTreadmill()
-            end
-        end
-    end)
-end
-
-local function setupSafeAntiAFK()
-    if getconnections then
-        for _, c in getconnections(LocalPlayer.Idled) do
-            pcall(function() c:Disable() end)
-            pcall(function() c:Disconnect() end)
-        end
-    end
-
-    LocalPlayer.Idled:Connect(function()
-        pcall(function()
-            local VirtualInputManager = Instance.new("VirtualInputManager")
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-            VirtualInputManager:Destroy()
-        end)
-    end)
-end
-
-setupSafeAntiAFK()
+-- ==================== [ FUNGSI AUTO RECONNECT ] ====================
 
 local function handleReconnect(reason)
     if isReconnecting or not autoReconnectEnabled then
@@ -239,4 +160,138 @@ pcall(function()
             end
         end)
     end
+end)
+
+-- ==================== [ FUNGSI KAVLING BASE ] ====================
+
+local function findMyOwnPlot()
+    local plotsFolder = workspace:FindFirstChild("Plots")
+    if not plotsFolder then return nil end
+    
+    local myDisplayName = LocalPlayer.DisplayName
+    local myUsername = LocalPlayer.Name
+
+    for _, plot in pairs(plotsFolder:GetChildren()) do
+        local plotSign = plot:FindFirstChild("PlotSign")
+        local playerPlotSign = plotSign and plotSign:FindFirstChild("PlayerPlotSign")
+        local frame = playerPlotSign and playerPlotSign:FindFirstChild("Frame")
+        local playerNameLabel = frame and frame:FindFirstChild("PlayerName")
+        
+        if playerNameLabel and playerNameLabel:IsA("TextLabel") then
+            local txt = playerNameLabel.Text
+            if txt == myDisplayName or txt == myUsername then
+                print("[SUKSES CLOCK] Menemukan plot valid milikmu! Nomor Kavling: [" .. plot.Name .. "]")
+                return plot
+            end
+        end
+    end
+    return nil
+end
+
+-- ==================== [ FUNGSI UTAMA TREADMILL ] ====================
+
+local function requestEquip()
+    task.wait(2.5) 
+    
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    
+    local Packages = ReplicatedStorage:WaitForChild("Packages", 15)
+    local Networking = Packages and Packages:WaitForChild("Networking", 15)
+    local Event = Networking and Networking:WaitForChild("RF/Treadmill/AskWearStill", 15)
+    
+    local attempts = 0
+    while rootPart and rootPart.Anchored == false and attempts < 10 do
+        attempts = attempts + 1
+        print("[VALIDATOR] Karakter belum terkunci di treadmill. Siklus percobaan ke-" .. tostring(attempts))
+        
+        local myPlot = findMyOwnPlot()
+        local targetPosition = nil
+        
+        if myPlot then
+            local treadmill = myPlot:FindFirstChild("TreadmillUpgrade", true)
+            if treadmill then
+                targetPosition = treadmill:IsA("Model") and (treadmill.PrimaryPart and treadmill.PrimaryPart.Position) or treadmill.Position
+                
+                if not targetPosition and treadmill:IsA("Model") then
+                    for _, child in pairs(treadmill:GetChildren()) do
+                        if child:IsA("BasePart") then targetPosition = child.Position break end
+                    end
+                end
+            end
+        end
+        
+        if targetPosition then
+            local reached = false
+            local connection
+            
+            connection = humanoid.MoveToFinished:Connect(function()
+                reached = true
+                if connection then connection:Disconnect() end
+            end)
+            
+            humanoid:MoveTo(targetPosition)
+            
+            local timeout = 0
+            while not reached and timeout < 15 do
+                task.wait(0.5)
+                timeout = timeout + 0.5
+                
+                if (rootPart.Position - targetPosition).Magnitude <= 4 then
+                    reached = true
+                    if connection then connection:Disconnect() end
+                    break
+                end
+            end
+            
+            task.wait(0.5)
+        else
+            warn("[WARNING] Gagal melacak treadmill di plot milikmu. Mencoba bypass remote langsung sebagai cadangan...")
+        end
+        
+        if Event and Event:IsA("RemoteFunction") then
+            pcall(function()
+                Event:InvokeServer()
+            end)
+        end
+        
+        task.wait(1)
+    end
+    
+    if rootPart and rootPart.Anchored == true then
+        print("[SUKSES MUTLAK] Karakter resmi ter-anchored di atas treadmill base milik sendiri!")
+    else
+        warn("[GAGAL] Batas percobaan loop habis, karakter masih gagal naik ke treadmill.")
+    end
+end
+
+-- ==================== [ ANTI-AFK INTERNAL ] ====================
+
+local function setupSafeAntiAFK()
+    if getconnections then
+        for _, c in getconnections(LocalPlayer.Idled) do
+            pcall(function() c:Disable() end)
+            pcall(function() c:Disconnect() end)
+        end
+    end
+
+    LocalPlayer.Idled:Connect(function()
+        pcall(function()
+            local VirtualInputManager = Instance.new("VirtualInputManager")
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            VirtualInputManager:Destroy()
+        end)
+    end)
+end
+
+-- ==================== [ EKSEKUSI UTAMA ] ====================
+setupSafeAntiAFK()
+
+task.spawn(requestEquip)
+
+LocalPlayer.CharacterAdded:Connect(function(character)
+    task.wait(5) 
+    requestEquip()
 end)
