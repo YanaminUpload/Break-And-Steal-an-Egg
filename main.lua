@@ -39,6 +39,15 @@ frame.BorderSizePixel = 0
 frame.BackgroundTransparency = 0.2
 frame.Parent = screenGui
 
+pcall(function()
+    GuiService.MenuOpened:Connect(function()
+        screenGui.Enabled = false
+    end)
+    GuiService.MenuClosed:Connect(function()
+        screenGui.Enabled = true
+    end)
+end)
+
 local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(0, 8)
 uiCorner.Parent = frame
@@ -167,105 +176,72 @@ end)
 local function findMyOwnPlot()
     local plotsFolder = workspace:FindFirstChild("Plots")
     if not plotsFolder then return nil end
-    
-    local myDisplayName = LocalPlayer.DisplayName
-    local myUsername = LocalPlayer.Name
 
-    for _, plot in pairs(plotsFolder:GetChildren()) do
-        local plotSign = plot:FindFirstChild("PlotSign")
-        local playerPlotSign = plotSign and plotSign:FindFirstChild("PlayerPlotSign")
-        local frame = playerPlotSign and playerPlotSign:FindFirstChild("Frame")
-        local playerNameLabel = frame and frame:FindFirstChild("PlayerName")
-        
-        if playerNameLabel and playerNameLabel:IsA("TextLabel") then
-            local txt = playerNameLabel.Text
-            if txt == myDisplayName or txt == myUsername then
-                print("[SUKSES CLOCK] Menemukan plot valid milikmu! Nomor Kavling: [" .. plot.Name .. "]")
-                return plot
+    local expected = {
+        [LocalPlayer.DisplayName:lower():gsub("%s+", "")] = true,
+        [LocalPlayer.Name:lower():gsub("%s+", "")] = true,
+    }
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        for _, object in ipairs(plot:GetDescendants()) do
+            if object.Name == "PlayerName" and object:IsA("TextLabel") then
+                local name = object.Text:lower():gsub("%s+", "")
+                if expected[name] then return plot end
             end
         end
     end
     return nil
 end
-
 -- ==================== [ FUNGSI UTAMA TREADMILL ] ====================
 
 local function requestEquip()
-    task.wait(2.5) 
-    
-    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild("Humanoid")
-    local rootPart = character:WaitForChild("HumanoidRootPart")
-    
-    local Packages = ReplicatedStorage:WaitForChild("Packages", 15)
-    local Networking = Packages and Packages:WaitForChild("Networking", 15)
-    local Event = Networking and Networking:WaitForChild("RF/Treadmill/AskWearStill", 15)
-    
-    local attempts = 0
-    while rootPart and rootPart.Anchored == false and attempts < 10 do
-        attempts = attempts + 1
-        print("[VALIDATOR] Karakter belum terkunci di treadmill. Siklus percobaan ke-" .. tostring(attempts))
-        
-        local myPlot = findMyOwnPlot()
-        local targetPosition = nil
-        
-        if myPlot then
-            local treadmill = myPlot:FindFirstChild("TreadmillUpgrade", true)
-            if treadmill then
-                targetPosition = treadmill:IsA("Model") and (treadmill.PrimaryPart and treadmill.PrimaryPart.Position) or treadmill.Position
-                
-                if not targetPosition and treadmill:IsA("Model") then
-                    for _, child in pairs(treadmill:GetChildren()) do
-                        if child:IsA("BasePart") then targetPosition = child.Position break end
-                    end
-                end
-            end
+    task.wait(1)
+    local plotsFolder = workspace:FindFirstChild("Plots")
+    if not plotsFolder then return end
+
+    local plotSaya, nomorPlotSaya
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        local ownerId = plot:GetAttribute("OwnerUserId")
+        if ownerId and tonumber(ownerId) == LocalPlayer.UserId then
+            plotSaya = plot
+            local nomorStr = plot.Name:match("%d+")
+            nomorPlotSaya = nomorStr and tonumber(nomorStr)
+            break
         end
-        
-        if targetPosition then
-            local reached = false
-            local connection
-            
-            connection = humanoid.MoveToFinished:Connect(function()
-                reached = true
-                if connection then connection:Disconnect() end
-            end)
-            
-            humanoid:MoveTo(targetPosition)
-            
-            local timeout = 0
-            while not reached and timeout < 15 do
-                task.wait(0.5)
-                timeout = timeout + 0.5
-                
-                if (rootPart.Position - targetPosition).Magnitude <= 4 then
-                    reached = true
-                    if connection then connection:Disconnect() end
-                    break
-                end
-            end
-            
-            task.wait(0.5)
-        else
-            warn("[WARNING] Gagal melacak treadmill di plot milikmu. Mencoba bypass remote langsung sebagai cadangan...")
-        end
-        
-        if Event and Event:IsA("RemoteFunction") then
-            pcall(function()
-                Event:InvokeServer()
-            end)
-        end
-        
-        task.wait(1)
     end
-    
-    if rootPart and rootPart.Anchored == true then
-        print("[SUKSES MUTLAK] Karakter resmi ter-anchored di atas treadmill base milik sendiri!")
+    if not plotSaya or not nomorPlotSaya then return end
+
+    local treadmill
+    for _, object in ipairs(plotSaya:GetDescendants()) do
+        local name = object.Name:lower()
+        if name:find("treadmill", 1, true) and not name:find("board", 1, true) and not name:find("gui", 1, true) then
+            treadmill = object
+            break
+        end
+    end
+    if not treadmill then return end
+
+    local targetPart
+    if treadmill:IsA("BasePart") then
+        targetPart = treadmill
+    elseif treadmill:IsA("Model") then
+        targetPart = treadmill.PrimaryPart or treadmill:FindFirstChild("Hitbox", true) or treadmill:FindFirstChildWhichIsA("BasePart", true)
     else
-        warn("[GAGAL] Batas percobaan loop habis, karakter masih gagal naik ke treadmill.")
+        targetPart = treadmill:FindFirstChild("Hitbox", true) or treadmill:FindFirstChildWhichIsA("BasePart", true)
+    end
+    if not targetPart or not targetPart:IsA("BasePart") then return end
+
+    local cframeTreadmill = targetPart.CFrame
+    local character = LocalPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if rootPart then rootPart.CFrame = cframeTreadmill * CFrame.new(0, 2, 0) end
+
+    local remote = ReplicatedStorage:FindFirstChild("TreadmillSessionRemote")
+    if remote and remote:IsA("RemoteEvent") and firesignal then
+        pcall(function()
+            firesignal(remote.OnClientEvent, nomorPlotSaya, cframeTreadmill)
+        end)
     end
 end
-
 -- ==================== [ ANTI-AFK INTERNAL ] ====================
 
 local function setupSafeAntiAFK()
@@ -295,3 +271,32 @@ LocalPlayer.CharacterAdded:Connect(function(character)
     task.wait(5) 
     requestEquip()
 end)
+
+-- Auto upgrade khusus game breaksae.
+local priceLabel = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("TreadmillBoardGui"):WaitForChild("Purchase"):WaitForChild("Price")
+local upgradeRemote = ReplicatedStorage:WaitForChild("UpgradeTreadmillRequest")
+local lastAttemptPrice = nil
+
+local function dapatkanHargaAsli()
+    local teks = priceLabel.Text:gsub("[%$%,%s]", "")
+    local angka = tonumber(teks:match("[%d%.]+"))
+    if not angka then return 0 end
+    local sufiks = teks:match("([kKmMbBtT])$")
+    local multiplier = ({ k = 1e3, m = 1e6, b = 1e9, t = 1e12 })[(sufiks or ""):lower()] or 1
+    return angka * multiplier
+end
+
+task.spawn(function()
+    while task.wait(1) do
+        local hargaUpgrade = dapatkanHargaAsli()
+        local uangGua = tonumber(LocalPlayer:GetAttribute("Cash")) or 0
+        if hargaUpgrade > 0 and uangGua >= hargaUpgrade and lastAttemptPrice ~= hargaUpgrade then
+            lastAttemptPrice = hargaUpgrade
+            local ok = pcall(function()
+                upgradeRemote:FireServer()
+            end)
+            if ok then task.delay(1, requestEquip) end
+        end
+    end
+end)
+
