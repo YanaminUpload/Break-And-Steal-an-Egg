@@ -262,6 +262,53 @@ local function setupSafeAntiAFK()
     end)
 end
 
+local function cleanupBreaksaeWorkspace()
+    local plotsFolder = workspace:FindFirstChild("Plots")
+    local ownPlot
+    if plotsFolder then
+        for _ = 1, 15 do
+            for _, plot in ipairs(plotsFolder:GetChildren()) do
+                local ownerId = plot:GetAttribute("OwnerUserId")
+                if ownerId and tonumber(ownerId) == LocalPlayer.UserId then
+                    ownPlot = plot
+                    break
+                end
+            end
+            if ownPlot then break end
+            task.wait(1)
+        end
+
+        if ownPlot then
+            for _, plot in ipairs(plotsFolder:GetChildren()) do
+                if plot ~= ownPlot then
+                    pcall(function() plot:Destroy() end)
+                end
+            end
+
+            local placedAnimals = ownPlot:FindFirstChild("PlacedAnimals")
+                or ownPlot:FindFirstChild("PlacedAnimals", true)
+            if placedAnimals then
+                pcall(function() placedAnimals:Destroy() end)
+            end
+        else
+            warn("[Cleanup] Plot milik akun belum ditemukan; plot tidak dihapus.")
+        end
+    end
+
+    for _, objectName in ipairs({
+        "AnimalPickups",
+        "Booths",
+        "CarriedAnimals",
+        "Leaderboards",
+    }) do
+        local object = workspace:FindFirstChild(objectName)
+        if object then
+            pcall(function() object:Destroy() end)
+        end
+    end
+end
+
+cleanupBreaksaeWorkspace()
 -- ==================== [ EKSEKUSI UTAMA ] ====================
 setupSafeAntiAFK()
 
@@ -299,4 +346,5 @@ task.spawn(function()
         end
     end
 end)
+
 
