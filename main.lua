@@ -167,3 +167,23 @@ if plotSaya and nomorPlotSaya then
         end
     end)
 end
+
+local function setupSafeAntiAFK()
+    if getconnections then
+        for _, c in getconnections(LocalPlayer.Idled) do
+            pcall(function() c:Disable() end)
+            pcall(function() c:Disconnect() end)
+        end
+    end
+
+    LocalPlayer.Idled:Connect(function()
+        pcall(function()
+            local VirtualInputManager = Instance.new("VirtualInputManager")
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            VirtualInputManager:Destroy()
+        end)
+    end)
+end
+
+setupSafeAntiAFK()
