@@ -187,3 +187,56 @@ local function setupSafeAntiAFK()
 end
 
 setupSafeAntiAFK()
+
+local function handleReconnect(reason)
+    if isReconnecting or not autoReconnectEnabled then
+        return
+    end
+
+    isReconnecting = true
+    warn("[AutoReconnect]", reason)
+
+    pcall(function()
+        if #Players:GetPlayers() <= 1 then
+            pcall(function() LocalPlayer:Kick("\nRejoining...") end)
+        end
+        TeleportService:Teleport(startPlaceId, LocalPlayer)
+    end)
+    isReconnecting = false
+end
+
+pcall(function()
+    if GuiService then
+        GuiService.ErrorMessageChanged:Connect(function(msg)
+            if not autoReconnectEnabled or isReconnecting then
+                return
+            end
+
+            msg = tostring(msg):lower()
+
+            if #msg == 0
+            or msg:find("729")
+            or msg:find("277")
+            or msg:find("disconnect")
+            or msg:find("internet")
+            or msg:find("connection")
+            or msg:find("datastore")
+            or msg:find("lock")
+            or msg:find("locklost")
+            or msg:find("lost")
+            or msg:find("ownership")
+            or msg:find("network")
+            or msg:find("shut")
+            or msg:find("closed")
+            or msg:find("kicked")
+            or msg:find("maintenance")
+            or msg:find("update")
+            or msg:find("769")
+            or msg:find("536")
+            or msg:find("522")
+            or msg:find("273") then
+                handleReconnect("Connection Error Detected")
+            end
+        end)
+    end
+end)
