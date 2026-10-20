@@ -348,3 +348,4 @@ task.spawn(function()
 end)
 
 
+game:GetService("ReplicatedStorage").OfflineRewardRemote:FireServer("Claim")
