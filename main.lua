@@ -314,10 +314,10 @@ setupSafeAntiAFK()
 
 task.spawn(requestEquip)
 
-LocalPlayer.CharacterAdded:Connect(function(character)
-    task.wait(5) 
-    requestEquip()
-end)
+-- LocalPlayer.CharacterAdded:Connect(function(character)
+--     task.wait(5) 
+--     requestEquip()
+-- end)
 
 -- Auto upgrade khusus game breaksae.
 local priceLabel = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("TreadmillBoardGui"):WaitForChild("Purchase"):WaitForChild("Price")
